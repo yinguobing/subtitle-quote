@@ -42,7 +42,7 @@ AVATAR_GAP = 24  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
 LINE_GAP = 20  # 文本行间距
 MAX_WIDTH = 700  # 气泡最大宽度
-FPS = 20
+FPS = 24
 FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
 
 # 颜色（暗色模式，统一 RGBA 四元组）
@@ -143,16 +143,11 @@ def render_quote(
     canvas_h=720,
     full_text=None,
     bg_color=None,
+    fade=1.0,
 ):
     """渲染一帧：头像 + 名字 + 气泡 + 打字机文字
 
-    side: 'left' 或 'right'
-        left  → 头像名左, 气泡右
-        right → 头像名右, 气泡左
-
-    full_text: 完整文本，用于预计算气泡尺寸以固定头像位置；
-              省略时使用 visible_text（兼容直接调用）
-    bg_color: 背景色 RGBA 元组，None 表示透明背景
+    fade: 最后一个字符的不透明度 (0.0→1.0)，实现淡入效果
     """
     if full_text is None:
         full_text = visible_text
@@ -221,14 +216,30 @@ def render_quote(
         fill=bubble_color,
     )
 
-    # 绘制文字
+    # 绘制文字（最后一个字符支持淡入）
     pad_l, pad_t = BUBBLE_PAD[0], BUBBLE_PAD[1]
     tx_pos = bubble_x + pad_l
     ty_pos = bubble_y + pad_t
-    for line in lines:
-        draw.text((tx_pos, ty_pos), line, fill=TEXT_COLOR, font=font)
-        bbox = draw.textbbox((0, 0), line, font=font)
-        ty_pos += bbox[3] - bbox[1] + LINE_GAP
+    for li, line in enumerate(lines):
+        is_last_line = li == len(lines) - 1
+        # 只有最后一行才需要处理淡入
+        if is_last_line and fade < 1.0 and line:
+            prefix = line[:-1]
+            # 绘制前面字符（完全不透明）
+            if prefix:
+                draw.text((tx_pos, ty_pos), prefix, fill=TEXT_COLOR, font=font)
+                prefix_w = draw.textbbox((0, 0), prefix, font=font)[2]
+                tx_pos += prefix_w
+            # 绘制最后一个字符（淡入 alpha）
+            faded = (*TEXT_COLOR[:3], int(TEXT_COLOR[3] * fade))
+            draw.text((tx_pos, ty_pos), line[-1], fill=faded, font=font)
+            # 恢复 tx_pos 用于后续行（虽然最后一行不会有了）
+            bbox = draw.textbbox((0, 0), line, font=font)
+            ty_pos += bbox[3] - bbox[1] + LINE_GAP
+        else:
+            draw.text((tx_pos, ty_pos), line, fill=TEXT_COLOR, font=font)
+            bbox = draw.textbbox((0, 0), line, font=font)
+            ty_pos += bbox[3] - bbox[1] + LINE_GAP
 
     return frame
 
@@ -250,18 +261,20 @@ def render_quote_clip(
 
     for ci in range(1, total_chars + 1):
         visible = text[:ci]
-        f = render_quote(
-            name,
-            visible,
-            side,
-            avatar_img,
-            canvas_w,
-            canvas_h,
-            full_text=text,
-            bg_color=bg_color,
-        )
-        # 每个字符停留 frames_per_char 帧
-        for _ in range(frames_per_char):
+        # 分 frames_per_char 步从 0 淡入到 1
+        for step in range(frames_per_char):
+            fade = (step + 1) / frames_per_char
+            f = render_quote(
+                name,
+                visible,
+                side,
+                avatar_img,
+                canvas_w,
+                canvas_h,
+                full_text=text,
+                bg_color=bg_color,
+                fade=fade,
+            )
             frames.append(f)
 
     # 完整显示后停留一会儿
