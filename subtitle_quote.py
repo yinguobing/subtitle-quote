@@ -36,7 +36,7 @@ FONT_BOLD = "/home/robin/.local/share/fonts/NotoSansSC-SemiBold.ttf"
 TEXT_SIZE = 32  # 气泡文字大小
 NAME_SIZE = 24  # 名字大小
 AVATAR_SIZE = 80  # 头像尺寸
-BUBBLE_PAD = (30, 20, 30, 40)  # 气泡内边距 (l, t, r, b)
+BUBBLE_PAD = (30, 20, 30, 80)  # 气泡内边距 (l, t, r, b)
 BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
 AVATAR_GAP = 24  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
@@ -44,6 +44,7 @@ LINE_GAP = 20  # 文本行间距
 MAX_WIDTH = 700  # 气泡最大宽度
 FPS = 24
 FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
+FADE_SPAN = 5  # 淡入窗口（最近几个字符同时渐变）
 
 # 颜色（暗色模式，统一 RGBA 四元组）
 BUBBLE_COLOR_OTHER = (46, 46, 46, 255)  # 对方气泡：暗灰
@@ -143,11 +144,11 @@ def render_quote(
     canvas_h=720,
     full_text=None,
     bg_color=None,
-    fade=1.0,
+    alphas=None,
 ):
     """渲染一帧：头像 + 名字 + 气泡 + 打字机文字
 
-    fade: 最后一个字符的不透明度 (0.0→1.0)，实现淡入效果
+    alphas: 逐字符不透明度列表 len=len(visible_text)，None 表示全部 1.0
     """
     if full_text is None:
         full_text = visible_text
@@ -216,30 +217,49 @@ def render_quote(
         fill=bubble_color,
     )
 
-    # 绘制文字（最后一个字符支持淡入）
+    # 绘制文字（alpha 合成：先画满不透明层，再按字符 alpha 乘算）
     pad_l, pad_t = BUBBLE_PAD[0], BUBBLE_PAD[1]
-    tx_pos = bubble_x + pad_l
-    ty_pos = bubble_y + pad_t
-    for li, line in enumerate(lines):
-        is_last_line = li == len(lines) - 1
-        # 只有最后一行才需要处理淡入
-        if is_last_line and fade < 1.0 and line:
-            prefix = line[:-1]
-            # 绘制前面字符（完全不透明）
-            if prefix:
-                draw.text((tx_pos, ty_pos), prefix, fill=TEXT_COLOR, font=font)
-                prefix_w = draw.textbbox((0, 0), prefix, font=font)[2]
-                tx_pos += prefix_w
-            # 绘制最后一个字符（淡入 alpha）
-            faded = (*TEXT_COLOR[:3], int(TEXT_COLOR[3] * fade))
-            draw.text((tx_pos, ty_pos), line[-1], fill=faded, font=font)
-            # 恢复 tx_pos 用于后续行（虽然最后一行不会有了）
-            bbox = draw.textbbox((0, 0), line, font=font)
-            ty_pos += bbox[3] - bbox[1] + LINE_GAP
-        else:
-            draw.text((tx_pos, ty_pos), line, fill=TEXT_COLOR, font=font)
-            bbox = draw.textbbox((0, 0), line, font=font)
-            ty_pos += bbox[3] - bbox[1] + LINE_GAP
+    base_tx = bubble_x + pad_l
+    ty = bubble_y + pad_t
+
+    # 先画到透明层（全部文字 100% 不透明）
+    text_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    layer_draw = ImageDraw.Draw(text_layer)
+    for line in lines:
+        layer_draw.text((base_tx, ty), line, fill=TEXT_COLOR, font=font)
+        lh = layer_draw.textbbox((0, 0), line, font=font)[3]
+        ty += lh + LINE_GAP
+
+    # 逐字对透明层做 alpha 乘法（PIL 不支持在 draw.text 时渐变 alpha）
+    if alphas is not None and not all(a >= 1.0 for a in alphas):
+        layer_pix = text_layer.load()
+        char_x = base_tx
+        char_y = bubble_y + pad_t
+        line_start = 0
+        for line in lines:
+            for i, ch in enumerate(line):
+                char_idx = line_start + i
+                a = alphas[char_idx]
+                if a < 1.0:
+                    cbox = layer_draw.textbbox((0, 0), ch, font=font)
+                    cw = cbox[2] - cbox[0]
+                    ch_x = int(char_x + cbox[0])
+                    ch_y = int(char_y + cbox[1])
+                    ch_w = max(cw, 1)
+                    ch_h = max(cbox[3] - cbox[1], 1)
+                    for py in range(ch_y, min(ch_y + ch_h + 4, canvas_h)):
+                        for px in range(ch_x, min(ch_x + ch_w + 4, canvas_w)):
+                            r, g, b, pixel_a = layer_pix[px, py]
+                            if pixel_a > 0:
+                                layer_pix[px, py] = (r, g, b, int(pixel_a * a))
+                char_x += layer_draw.textbbox((0, 0), ch, font=font)[2]
+            # 换行
+            char_x = base_tx
+            char_y += layer_draw.textbbox((0, 0), line, font=font)[3] + LINE_GAP
+            line_start += len(line)
+
+    # 合成到 frame
+    frame = Image.alpha_composite(frame, text_layer)
 
     return frame
 
@@ -258,12 +278,19 @@ def render_quote_clip(
     """渲染整段话的所有帧，返回帧列表"""
     frames = []
     total_chars = len(text)
+    fade_frames = FADE_SPAN * frames_per_char
+    # 每个字符首次出现的全局帧号
+    char_start = [c * frames_per_char for c in range(total_chars)]
 
+    frame_idx = 0
     for ci in range(1, total_chars + 1):
         visible = text[:ci]
-        # 分 frames_per_char 步从 0 淡入到 1
-        for step in range(frames_per_char):
-            fade = (step + 1) / frames_per_char
+        for _ in range(frames_per_char):
+            # 逐字 alpha：按各自出场时间计算
+            alphas = [
+                min(1.0, (frame_idx - char_start[c] + 1) / fade_frames)
+                for c in range(ci)
+            ]
             f = render_quote(
                 name,
                 visible,
@@ -273,9 +300,10 @@ def render_quote_clip(
                 canvas_h,
                 full_text=text,
                 bg_color=bg_color,
-                fade=fade,
+                alphas=alphas,
             )
             frames.append(f)
+            frame_idx += 1
 
     # 完整显示后停留一会儿
     full_frame = render_quote(
