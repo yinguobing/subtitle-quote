@@ -26,9 +26,7 @@
 import argparse
 import os
 import re
-import tempfile
 import subprocess
-import math
 from PIL import Image, ImageDraw, ImageFont
 
 # ── 默认配置 ──────────────────────────────────────────────
@@ -284,33 +282,42 @@ def render_quote_clip(
 
 
 def save_frames_to_video(frames, output_path, fps=FPS, transparent=False):
-    """将帧列表保存为视频
+    """将帧列表保存为视频（通过 pipe 直接喂给 ffmpeg，零临时文件）
 
-    transparent=True  → RGBA + qtrle 编码 .mov（保留透明通道，VLC 兼容性差）
-    transparent=False → RGB  + h264 编码 .mp4（微信风格纯色背景，兼容性好）
+    transparent=True  → raw rgba  → qtrle 编码 .mov
+    transparent=False → raw rgb24 → h264  编码 .mp4
     """
+    w, h = frames[0].size
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for i, frame in enumerate(frames):
-            path = os.path.join(tmpdir, f"f_{i:06d}.png")
-            if not transparent:
-                frame = frame.convert("RGB")
-            frame.save(path, "PNG")
+    if transparent:
+        pix_fmt_in = "rgba"
+        pix_fmt_out = "rgba"
+        codec = "qtrle"
+    else:
+        pix_fmt_in = "rgb24"
+        pix_fmt_out = "yuv420p"
+        codec = "libx264"
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-framerate",
-            str(fps),
-            "-i",
-            os.path.join(tmpdir, "f_%06d.png"),
-            "-c:v",
-            "libx264" if not transparent else "qtrle",
-            "-pix_fmt",
-            "yuv420p" if not transparent else "rgba",
-            output_path,
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-pixel_format", pix_fmt_in,
+        "-video_size", f"{w}x{h}",
+        "-framerate", str(fps),
+        "-i", "-",  # stdin
+        "-c:v", codec,
+        "-pix_fmt", pix_fmt_out,
+        "-loglevel", "error",
+        output_path,
+    ]
+
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    for frame in frames:
+        if not transparent:
+            frame = frame.convert("RGB")
+        proc.stdin.write(frame.tobytes())
+    proc.stdin.close()
+    proc.wait()
 
     return output_path
 
