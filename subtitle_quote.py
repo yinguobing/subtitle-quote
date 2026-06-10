@@ -41,7 +41,7 @@ AVATAR_GAP = 16          # 头像到气泡间距
 LINE_GAP = 8             # 文本行间距
 MAX_WIDTH = 700          # 气泡最大宽度
 FPS = 20
-CHAR_INTERVAL = 3        # 每字符帧数（控制打字速度）
+FRAMES_PER_CHAR = 3     # 每字符持续帧数（越大打字越慢）
 
 # 颜色
 BUBBLE_COLOR = (255, 255, 255, 230)       # 气泡白色半透明
@@ -211,12 +211,14 @@ def render_quote(name, visible_text, side, avatar_img, canvas_w=1080, canvas_h=7
 
 
 def render_quote_clip(name, text, side, avatar_img, 
-                       canvas_w=1080, canvas_h=720, fps=FPS, chars_per_frame=CHAR_INTERVAL):
+                       canvas_w=1080, canvas_h=720, fps=FPS, frames_per_char=FRAMES_PER_CHAR):
     """渲染整段话的所有帧，返回帧列表"""
     frames = []
     total_chars = len(text)
     
-    for ci in range(1, total_chars + 1, chars_per_frame):
+    for ci in range(1, total_chars + 1):
+        if ci > 1 and (ci - 1) % frames_per_char != 0:
+            continue
         visible = text[:ci]
         f = render_quote(name, visible, side, avatar_img, canvas_w, canvas_h)
         frames.append(f)
@@ -268,8 +270,8 @@ def main():
     parser.add_argument('--width', type=int, default=1080, help='画布宽度')
     parser.add_argument('--height', type=int, default=720, help='画布高度')
     parser.add_argument('--fps', type=int, default=FPS, help='帧率')
-    parser.add_argument('--speed', type=int, default=CHAR_INTERVAL, 
-                        help='每帧跳过字符数（越大打字越快）')
+    parser.add_argument('--speed', type=int, default=FRAMES_PER_CHAR, 
+                        help='每字符帧数（越大打字越慢，默认3=15字符/秒）')
     parser.add_argument('--batch', action='store_true', 
                         help='批量模式：将 input 文件每行渲染为独立视频')
     
