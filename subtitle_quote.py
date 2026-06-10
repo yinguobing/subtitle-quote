@@ -36,7 +36,7 @@ FONT_BOLD = "/home/robin/.local/share/fonts/NotoSansSC-SemiBold.ttf"
 TEXT_SIZE = 32  # 气泡文字大小
 NAME_SIZE = 24  # 名字大小
 AVATAR_SIZE = 80  # 头像尺寸
-BUBBLE_PAD = (30, 20, 20, 40)  # 气泡内边距 (l, t, r, b)
+BUBBLE_PAD = (30, 20, 30, 40)  # 气泡内边距 (l, t, r, b)
 BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
 AVATAR_GAP = 24  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
