@@ -40,7 +40,7 @@ BUBBLE_PAD = (30, 20, 20, 40)  # 气泡内边距 (l, t, r, b)
 BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
 AVATAR_GAP = 24  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
-LINE_GAP = 16  # 文本行间距
+LINE_GAP = 20  # 文本行间距
 MAX_WIDTH = 700  # 气泡最大宽度
 FPS = 20
 FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
@@ -299,15 +299,24 @@ def save_frames_to_video(frames, output_path, fps=FPS, transparent=False):
         codec = "libx264"
 
     cmd = [
-        "ffmpeg", "-y",
-        "-f", "rawvideo",
-        "-pixel_format", pix_fmt_in,
-        "-video_size", f"{w}x{h}",
-        "-framerate", str(fps),
-        "-i", "-",  # stdin
-        "-c:v", codec,
-        "-pix_fmt", pix_fmt_out,
-        "-loglevel", "error",
+        "ffmpeg",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        pix_fmt_in,
+        "-video_size",
+        f"{w}x{h}",
+        "-framerate",
+        str(fps),
+        "-i",
+        "-",  # stdin
+        "-c:v",
+        codec,
+        "-pix_fmt",
+        pix_fmt_out,
+        "-loglevel",
+        "error",
         output_path,
     ]
 
