@@ -33,16 +33,16 @@ from PIL import Image, ImageDraw, ImageFont
 
 FONT = "/home/robin/.local/share/fonts/NotoSansSC-Medium.ttf"
 FONT_BOLD = "/home/robin/.local/share/fonts/NotoSansSC-SemiBold.ttf"
-TEXT_SIZE = 32  # 气泡文字大小
-NAME_SIZE = 24  # 名字大小
-AVATAR_SIZE = 80  # 头像尺寸
-BUBBLE_PAD = (30, 20, 30, 80)  # 气泡内边距 (l, t, r, b)
-BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
-AVATAR_GAP = 24  # 头像到气泡间距
+TEXT_SIZE = 48  # 气泡文字大小
+NAME_SIZE = 32  # 名字大小
+AVATAR_SIZE = 100  # 头像尺寸
+BUBBLE_PAD = (40, 20, 40, 60)  # 气泡内边距 (l, t, r, b)
+BUBBLE_RADIUS = 16  # 气泡圆角（微信风格：小圆角）
+AVATAR_GAP = 48  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
-LINE_GAP = 16  # 文本行间距
-LETTER_SPACING = 2  # 字符间距（px）
-MAX_WIDTH = 700  # 气泡最大宽度
+LINE_GAP = 30  # 文本行间距
+LETTER_SPACING = 3  # 字符间距（px）
+MAX_WIDTH = 860  # 气泡最大宽度
 FPS = 24
 FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
 FADE_SPAN = 5  # 淡入窗口（最近几个字符同时渐变）
@@ -142,8 +142,8 @@ def render_quote(
     visible_text,
     side,
     avatar_img,
-    canvas_w=1080,
-    canvas_h=720,
+    canvas_w=1920,
+    canvas_h=1080,
     full_text=None,
     bg_color=None,
     alphas=None,
@@ -232,8 +232,8 @@ def render_quote(
         for ch in line:
             layer_draw.text((cx, ty), ch, fill=TEXT_COLOR, font=font)
             cx += layer_draw.textbbox((0, 0), ch, font=font)[2] + LETTER_SPACING
-        lh = layer_draw.textbbox((0, 0), line, font=font)[3]
-        ty += lh + LINE_GAP
+        b = layer_draw.textbbox((0, 0), line, font=font)
+        ty += (b[3] - b[1]) + LINE_GAP
 
     # 逐字对透明层做 alpha 乘法（PIL 不支持在 draw.text 时渐变 alpha）
     if alphas is not None and not all(a >= 1.0 for a in alphas):
@@ -260,7 +260,8 @@ def render_quote(
                 char_x += layer_draw.textbbox((0, 0), ch, font=font)[2] + LETTER_SPACING
             # 换行
             char_x = base_tx
-            char_y += layer_draw.textbbox((0, 0), line, font=font)[3] + LINE_GAP
+            b = layer_draw.textbbox((0, 0), line, font=font)
+            char_y += (b[3] - b[1]) + LINE_GAP
             line_start += len(line)
 
     # 合成到 frame
@@ -274,8 +275,8 @@ def render_quote_clip(
     text,
     side,
     avatar_img,
-    canvas_w=1080,
-    canvas_h=720,
+    canvas_w=1920,
+    canvas_h=1080,
     fps=FPS,
     frames_per_char=FRAMES_PER_CHAR,
     bg_color=None,
@@ -393,8 +394,8 @@ def main():
     )
     parser.add_argument("--avatar", help="头像图片路径（所有引用共用）")
     parser.add_argument("--right", action="store_true", help="头像在右侧（默认左侧）")
-    parser.add_argument("--width", type=int, default=1080, help="画布宽度")
-    parser.add_argument("--height", type=int, default=720, help="画布高度")
+    parser.add_argument("--width", type=int, default=1920, help="画布宽度")
+    parser.add_argument("--height", type=int, default=1080, help="画布高度")
     parser.add_argument("--fps", type=int, default=FPS, help="帧率")
     parser.add_argument(
         "--speed",
