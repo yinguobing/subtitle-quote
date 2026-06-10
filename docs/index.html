@@ -653,10 +653,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.2rem;
       margin-bottom: 1.25rem;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-default);
+      color: var(--accent-green);
+    }
+    .feature-icon svg {
+      width: 22px;
+      height: 22px;
     }
 
     .feature-card h3 {
@@ -1020,32 +1024,32 @@
       </div>
       <div class="features-grid">
         <div class="feature-card reveal">
-          <div class="feature-icon">⌨️</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><line x1="4" y1="7" x2="16" y2="7"/><line x1="4" y1="12" x2="11" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/><line x1="15.5" y1="5" x2="15.5" y2="19" stroke-width="2"/></svg></div>
           <h3>打字机逐字淡入</h3>
           <p>每个字符独立控制 alpha 通道，最近 N 个字符平滑渐变，模拟真实的打字机效果，非简单的逐字弹出。</p>
         </div>
         <div class="feature-card reveal">
-          <div class="feature-icon">💬</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="1.5" y="4" width="10" height="7" rx="2.5"/><rect x="10" y="11" width="10" height="7" rx="2.5" fill="currentColor" fill-opacity="0.2"/></svg></div>
           <h3>微信风格布局</h3>
           <p>暗色模式背景、圆形头像、对语气泡，完美还原聊天界面美学。左/右气泡自动适配，支持自定义头像。</p>
         </div>
         <div class="feature-card reveal">
-          <div class="feature-icon">🎬</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><polygon points="10,8 10,16 17,12" fill="currentColor" fill-opacity="0.25"/></svg></div>
           <h3>专业视频输出</h3>
           <p>1920×1080 h264/mp4，兼容所有播放器。可选透明背景 qtrle/mov，无缝接入 DaVinci Resolve 后期流程。</p>
         </div>
         <div class="feature-card reveal">
-          <div class="feature-icon">📝</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2" y="3" width="13" height="16" rx="1.5"/><rect x="7" y="7" width="13" height="16" rx="1.5" fill="currentColor" fill-opacity="0.15"/></svg></div>
           <h3>批量渲染</h3>
           <p>将整个对话脚本写入文本文件，一键生成多段独立视频。自动编号输出，适合内容矩阵批量生产。</p>
         </div>
         <div class="feature-card reveal">
-          <div class="feature-icon">🎨</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="6" x2="15" y2="6"/><circle cx="18" cy="6" r="2.5"/><line x1="8" y1="12" x2="22" y2="12"/><circle cx="5" cy="12" r="2.5"/><line x1="2" y1="18" x2="16" y2="18"/><circle cx="19" cy="18" r="2.5"/></svg></div>
           <h3>完全可配置</h3>
           <p>字体、字号、颜色、间距、气泡圆角、打字速度——所有视觉参数开放配置，匹配你的品牌风格。</p>
         </div>
         <div class="feature-card reveal">
-          <div class="feature-icon">⚡</div>
+          <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 3,13 10,13 8,22 19,10 12,10 14,2" fill="currentColor" fill-opacity="0.15"/></svg></div>
           <h3>零临时文件</h3>
           <p>帧数据通过 pipe 直接喂给 ffmpeg，不落盘。纯内存渲染，生成速度快，不污染文件系统。</p>
         </div>
