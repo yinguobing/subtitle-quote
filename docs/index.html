@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>subtitle-quote — 聊天字幕视频生成器</title>
+  <meta name="description" content="将对话文本渲染为带打字机效果的短视频，微信风格暗色配色与布局。CLI 工具，零依赖视频生成。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,0..100;1,9..144,300..700,0..100&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+   CSS Custom Properties
+   ═══════════════════════════════════════════════════════════════ */
+    :root {
+      --bg-deep: #08080a;
+      --bg-primary: #0d0d10;
+      --bg-secondary: #131316;
+      --bg-tertiary: #1a1a1f;
+      --bg-elevated: #222228;
+      --border-subtle: #1f1f25;
+      --border-default: #2a2a32;
+      --text-primary: #e4e4ec;
+      --text-secondary: #9595a2;
+      --text-tertiary: #5e5e6d;
+      --accent-green: #5a9e4b;
+      --accent-green-soft: #436e38;
+      --accent-green-glow: rgba(90, 158, 75, 0.15);
+      --accent-gold: #c4a265;
+      --accent-gold-soft: #8a6d3b;
+      --bubble-other: #2a2a30;
+      --bubble-self: #2d4027;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      --font-display: 'Fraunces', 'Noto Serif SC', serif;
+      --font-body: 'DM Sans', 'Noto Sans SC', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Noto Sans SC', monospace;
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-slow: 600ms cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-glow: 0 0 80px rgba(90, 158, 75, 0.08);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Reset & Base
+   ═══════════════════════════════════════════════════════════════ */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-size: 1.0625rem;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background: var(--bg-deep);
+      overflow-x: hidden;
+    }
+
+    /* Grain texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: var(--font-display);
+      font-weight: 400;
+      line-height: 1.15;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 1.25rem;
+    }
+
+    a {
+      color: var(--accent-gold);
+      text-decoration: none;
+      transition: color var(--transition-fast);
+    }
+
+    a:hover {
+      color: var(--accent-green);
+    }
+
+    ::selection {
+      background: var(--accent-green-soft);
+      color: var(--text-primary);
+    }
+
+    img,
+    svg {
+      display: block;
+      max-width: 100%;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Navigation
+   ═══════════════════════════════════════════════════════════════ */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: transparent;
+      transition: background var(--transition-base), backdrop-filter var(--transition-base);
+    }
+
+    nav.scrolled {
+      background: rgba(8, 8, 10, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      color: var(--text-primary);
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .nav-logo span {
+      color: var(--accent-green);
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1.75rem;
+      align-items: center;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      font-weight: 450;
+      transition: color var(--transition-fast);
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-github {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 100px;
+      border: 1px solid var(--border-default);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      transition: all var(--transition-fast);
+    }
+
+    .nav-github:hover {
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Hero Section
+   ═══════════════════════════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8rem 2rem 6rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Ambient glow */
+    .hero-glow {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-green-glow) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      animation: heroGlowPulse 6s ease-in-out infinite;
+    }
+
+    @keyframes heroGlowPulse {
+
+      0%,
+      100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.15);
+      }
+    }
+
+    /* Dot pattern */
+    .hero-dots {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.06;
+      background-image: radial-gradient(circle, var(--text-primary) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 30%, transparent 70%);
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 1100px;
+      gap: 3rem;
+    }
+
+    /* ── Chat Demo Window ── */
+    .chat-demo {
+      width: 100%;
+      max-width: 420px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-default);
+      overflow: hidden;
+      box-shadow: var(--shadow-glow), var(--shadow-card);
+      animation: demoFloat 5s ease-in-out infinite;
+    }
+
+    @keyframes demoFloat {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+
+    .chat-demo-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.9rem 1.2rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .chat-demo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-default);
+    }
+
+    .chat-demo-dot:first-child {
+      background: #ff5f56;
+      border-color: #e0443e;
+    }
+
+    .chat-demo-dot:nth-child(2) {
+      background: #ffbd2e;
+      border-color: #dea123;
+    }
+
+    .chat-demo-dot:nth-child(3) {
+      background: #27c93f;
+      border-color: #1aab29;
+    }
+
+    .chat-demo-title {
+      margin-left: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+      font-family: var(--font-body);
+    }
+
+    .chat-demo-body {
+      padding: 1.2rem;
+      min-height: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      background: var(--bg-deep);
+    }
+
+    /* Chat message */
+    .chat-msg {
+      display: flex;
+      gap: 0.65rem;
+      align-items: flex-start;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: msgAppear 0.5s ease-out forwards;
+    }
+
+    @keyframes msgAppear {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .chat-msg.right {
+      flex-direction: row-reverse;
+    }
+
+    .chat-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      font-family: var(--font-body);
+    }
+
+    .chat-avatar.blue {
+      background: #4285f4;
+    }
+
+    .chat-avatar.red {
+      background: #ea4335;
+    }
+
+    .chat-avatar.green-avatar {
+      background: #34a853;
+    }
+
+    .chat-avatar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      flex-shrink: 0;
+    }
+
+    .chat-msg-name {
+      font-size: 0.72rem;
+      color: var(--text-tertiary);
+      font-family: var(--font-body);
+      white-space: nowrap;
+    }
+
+    .chat-bubble {
+      padding: 0.55rem 0.85rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.95rem;
+      line-height: 1.55;
+      max-width: 260px;
+      background: var(--bubble-other);
+      color: var(--text-primary);
+      word-break: break-word;
+      position: relative;
+    }
+
+    .chat-msg.right .chat-bubble {
+      background: var(--bubble-self);
+      color: #e8f0e4;
+    }
+
+    .chat-bubble .char {
+      display: inline;
+      transition: opacity 0.12s ease-out, color 0.5s ease-out;
+    }
+
+    .chat-bubble .char.pending {
+      opacity: 0;
+    }
+
+    .chat-bubble .char.recent {
+      color: #fff;
+    }
+
+    /* Cursor blink */
+    .chat-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent-green);
+      margin-left: 1px;
+      vertical-align: text-bottom;
+      animation: cursorBlink 0.8s step-end infinite;
+    }
+
+    .chat-cursor.idle {
+      animation: none;
+      opacity: 0;
+    }
+
+    @keyframes cursorBlink {
+      50% {
+        opacity: 0;
+      }
+    }
+
+    /* ── Hero Text ── */
+    .hero-text {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.9rem;
+      border-radius: 100px;
+      border: 1px solid var(--border-default);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      letter-spacing: 0.02em;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: badgePulse 2s ease-in-out infinite;
+    }
+
+    @keyframes badgePulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .hero-title {
+      max-width: 680px;
+      font-weight: 450;
+      font-variation-settings: 'SOFT' 50;
+    }
+
+    .hero-title em {
+      font-style: normal;
+      color: var(--accent-gold);
+      text-decoration: underline wavy;
+      text-decoration-color: var(--accent-gold-soft);
+      text-underline-offset: 0.16em;
+      text-decoration-thickness: 1.5px;
+    }
+
+    .hero-desc {
+      max-width: 500px;
+      color: var(--text-secondary);
+      font-size: 1.15rem;
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 0.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.5rem;
+      border-radius: 100px;
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      border: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent-green);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #6aae5b;
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(90, 158, 75, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid var(--border-default);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--text-secondary);
+      color: var(--text-primary);
+      transform: translateY(-1px);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Section Shared Styles
+   ═══════════════════════════════════════════════════════════════ */
+    .section {
+      padding: 6rem 2rem;
+      position: relative;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--accent-green);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 0.75rem;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .section-header h2 {
+      max-width: 560px;
+    }
+
+    .section-header p {
+      color: var(--text-secondary);
+      max-width: 480px;
+      font-size: 1.05rem;
+    }
+
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Features
+   ═══════════════════════════════════════════════════════════════ */
+    #features {
+      background: var(--bg-primary);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+
+    .feature-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      transition: border-color var(--transition-base), transform var(--transition-base);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 0%, var(--accent-green-glow), transparent 60%);
+      opacity: 0;
+      transition: opacity var(--transition-slow);
+    }
+
+    .feature-card:hover {
+      border-color: var(--border-default);
+      transform: translateY(-2px);
+    }
+
+    .feature-card:hover::before {
+      opacity: 1;
+    }
+
+    .feature-card>* {
+      position: relative;
+      z-index: 1;
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 1.25rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-default);
+    }
+
+    .feature-card h3 {
+      margin-bottom: 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 500;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Quick Start
+   ═══════════════════════════════════════════════════════════════ */
+    #quickstart {
+      background: var(--bg-deep);
+    }
+
+    .code-blocks {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 740px;
+      margin: 0 auto;
+    }
+
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .code-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .code-block-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      letter-spacing: 0.04em;
+    }
+
+    .code-copy {
+      font-family: var(--font-body);
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      background: none;
+      border: 1px solid transparent;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .code-copy:hover {
+      border-color: var(--border-default);
+      color: var(--text-secondary);
+    }
+
+    .code-copy.copied {
+      color: var(--accent-green);
+      border-color: var(--accent-green-soft);
+    }
+
+    .code-block pre {
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: var(--text-primary);
+    }
+
+    .code-block pre .c {
+      color: var(--text-tertiary);
+    }
+
+    /* comment */
+    .code-block pre .g {
+      color: var(--accent-green);
+    }
+
+    /* green / string */
+    .code-block pre .w {
+      color: var(--text-secondary);
+    }
+
+    /* muted */
+    .code-block pre .y {
+      color: var(--accent-gold);
+    }
+
+    /* gold / important */
+
+    /* ═══════════════════════════════════════════════════════════════
+   Config Table
+   ═══════════════════════════════════════════════════════════════ */
+    #config {
+      background: var(--bg-primary);
+    }
+
+    .config-table-wrap {
+      overflow-x: auto;
+      max-width: 820px;
+      margin: 0 auto;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .config-table thead {
+      background: var(--bg-secondary);
+    }
+
+    .config-table th {
+      text-align: left;
+      padding: 0.85rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .config-table td {
+      padding: 0.75rem 1.25rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+
+    .config-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .config-table tbody tr {
+      transition: background var(--transition-fast);
+    }
+
+    .config-table tbody tr:hover {
+      background: var(--bg-secondary);
+    }
+
+    .config-table td:first-child {
+      color: var(--accent-gold);
+    }
+
+    .config-table td:nth-child(2) {
+      color: var(--text-primary);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Footer
+   ═══════════════════════════════════════════════════════════════ */
+    footer {
+      padding: 3rem 2rem;
+      text-align: center;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-deep);
+    }
+
+    footer p {
+      color: var(--text-tertiary);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--text-secondary);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Scroll Reveal
+   ═══════════════════════════════════════════════════════════════ */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      nav {
+        padding: 0.85rem 1rem;
+      }
+
+      .nav-links {
+        gap: 1rem;
+      }
+
+      .nav-links a {
+        font-size: 0.8rem;
+      }
+
+      .hero {
+        padding: 6rem 1rem 4rem;
+      }
+
+      .hero-inner {
+        gap: 2rem;
+      }
+
+      .chat-demo {
+        max-width: 340px;
+      }
+
+      .chat-demo-body {
+        min-height: 260px;
+      }
+
+      .chat-bubble {
+        font-size: 0.85rem;
+        max-width: 210px;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .section {
+        padding: 4rem 1rem;
+      }
+
+      .section-header {
+        margin-bottom: 2.5rem;
+      }
+
+      .code-blocks {
+        max-width: 100%;
+      }
+
+      .hero-title {
+        font-size: clamp(2rem, 7vw, 2.8rem);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .nav-github span {
+        display: none;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Navigation
+     ═══════════════════════════════════════════════════════════ -->
+  <nav id="nav">
+    <a href="#" class="nav-logo">subtitle<span>-quote</span></a>
+    <ul class="nav-links">
+      <li><a href="#features">功能</a></li>
+      <li><a href="#quickstart">快速开始</a></li>
+      <li><a href="#config">配置</a></li>
+      <li>
+        <a href="https://github.com/yinguobing/subtitle-quote" class="nav-github" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path
+              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Hero
+     ═══════════════════════════════════════════════════════════ -->
+  <section class="hero" id="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-dots"></div>
+    <div class="hero-inner">
+      <!-- Live Chat Demo -->
+      <div class="chat-demo reveal">
+        <div class="chat-demo-header">
+          <div class="chat-demo-dot"></div>
+          <div class="chat-demo-dot"></div>
+          <div class="chat-demo-dot"></div>
+          <span class="chat-demo-title">subtitle-quote 实时预览</span>
+        </div>
+        <div class="chat-demo-body" id="chatBody">
+          <!-- Messages rendered by JS -->
+        </div>
+      </div>
+
+      <div class="hero-text reveal">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          v1.0 · Python CLI
+        </div>
+        <h1 class="hero-title">
+          对话<em>即</em>视频
+        </h1>
+        <p class="hero-desc">
+          将聊天文本渲染为微信风格的打字机短视频。<br>一行命令，零依赖视频生成。
+        </p>
+        <div class="hero-actions">
+          <a href="#quickstart" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 1l10 7-10 7V1z" />
+            </svg>
+            快速开始
+          </a>
+          <a href="https://github.com/yinguobing/subtitle-quote" class="btn btn-secondary" target="_blank"
+            rel="noopener">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Features
+     ═══════════════════════════════════════════════════════════ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">功能特性</span>
+        <h2>为内容创作者打造的<br>视频生成工具</h2>
+        <p>从纯文本到精美视频，每一步都精心打磨</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon">⌨️</div>
+          <h3>打字机逐字淡入</h3>
+          <p>每个字符独立控制 alpha 通道，最近 N 个字符平滑渐变，模拟真实的打字机效果，非简单的逐字弹出。</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">💬</div>
+          <h3>微信风格布局</h3>
+          <p>暗色模式背景、圆形头像、对语气泡，完美还原聊天界面美学。左/右气泡自动适配，支持自定义头像。</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">🎬</div>
+          <h3>专业视频输出</h3>
+          <p>1920×1080 h264/mp4，兼容所有播放器。可选透明背景 qtrle/mov，无缝接入 DaVinci Resolve 后期流程。</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">📝</div>
+          <h3>批量渲染</h3>
+          <p>将整个对话脚本写入文本文件，一键生成多段独立视频。自动编号输出，适合内容矩阵批量生产。</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">🎨</div>
+          <h3>完全可配置</h3>
+          <p>字体、字号、颜色、间距、气泡圆角、打字速度——所有视觉参数开放配置，匹配你的品牌风格。</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">⚡</div>
+          <h3>零临时文件</h3>
+          <p>帧数据通过 pipe 直接喂给 ffmpeg，不落盘。纯内存渲染，生成速度快，不污染文件系统。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Quick Start
+     ═══════════════════════════════════════════════════════════ -->
+  <section class="section" id="quickstart">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">快速开始</span>
+        <h2>三行命令，即刻生成</h2>
+        <p>Python 3 + Pillow + ffmpeg，开箱即用</p>
+      </div>
+      <div class="code-blocks reveal">
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-label">安装依赖</span>
+            <button class="code-copy" onclick="copyCode(this, 'pip install Pillow\n# 确保系统已安装 ffmpeg')">复制</button>
+          </div>
+          <pre><span class="c"># 安装 Python 依赖</span>
+<span class="w">pip install Pillow</span>
+
+<span class="c"># 确保 ffmpeg 已安装</span>
+<span class="w">ffmpeg -version</span></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-label">单条消息</span>
+            <button class="code-copy" onclick="copyCode(this, 'python3 subtitle_quote.py \" 国冰: AI 时代，你准备好了吗？\" -o
+              quote.mp4')">复制</button>
+          </div>
+          <pre><span class="c"># 生成单条聊天视频</span>
+<span class="w">python3 subtitle_quote.py</span> <span class="g">"国冰: AI 时代，你准备好了吗？"</span> <span class="w">-o quote.mp4</span>
+
+<span class="c"># 指定头像 + 右侧气泡（模拟自己发送）</span>
+<span class="w">python3 subtitle_quote.py</span> <span class="g">"国冰: 你好"</span> <span class="w">-o quote.mp4 --avatar avatar.jpg --right</span></pre>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-label">批量渲染</span>
+            <button class="code-copy"
+              onclick="copyCode(this, 'python3 subtitle_quote.py quotes.txt -o output_dir/ --batch')">复制</button>
+          </div>
+          <pre><span class="c"># quotes.txt — 每行一条对话</span>
+<span class="y">国冰: AI 时代，你准备好了吗？</span>
+<span class="y">小明: 准备好了！</span>
+<span class="y">国冰: 那就开始吧</span>
+
+<span class="c"># 批量生成，自动编号输出</span>
+<span class="w">python3 subtitle_quote.py quotes.txt -o output_dir/ --batch</span>
+<span class="c"># → output_dir/001.mp4, 002.mp4, 003.mp4</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Configuration
+     ═══════════════════════════════════════════════════════════ -->
+  <section class="section" id="config">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-label">配置参考</span>
+        <h2>命令行参数 & 可配置常量</h2>
+        <p>灵活的配置系统，从命令行到源码级定制</p>
+      </div>
+
+      <div class="config-table-wrap reveal" style="margin-bottom: 2.5rem;">
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>CLI 参数</th>
+              <th>默认值</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>input</td>
+              <td>—</td>
+              <td>文本或文件路径（格式：名字: 内容）</td>
+            </tr>
+            <tr>
+              <td>-o, --output</td>
+              <td>output</td>
+              <td>输出路径（单条模式自动补 .mp4）</td>
+            </tr>
+            <tr>
+              <td>--avatar</td>
+              <td>—</td>
+              <td>头像图片路径（不指定则生成首字母头像）</td>
+            </tr>
+            <tr>
+              <td>--right</td>
+              <td>—</td>
+              <td>头像在右侧（模拟自己发送，气泡变绿）</td>
+            </tr>
+            <tr>
+              <td>--width</td>
+              <td>1920</td>
+              <td>画布宽度</td>
+            </tr>
+            <tr>
+              <td>--height</td>
+              <td>1080</td>
+              <td>画布高度</td>
+            </tr>
+            <tr>
+              <td>--fps</td>
+              <td>24</td>
+              <td>帧率</td>
+            </tr>
+            <tr>
+              <td>--speed</td>
+              <td>2</td>
+              <td>每字符帧数，越大打字越慢</td>
+            </tr>
+            <tr>
+              <td>--batch</td>
+              <td>—</td>
+              <td>批量模式：每行生成独立视频</td>
+            </tr>
+            <tr>
+              <td>--transparent</td>
+              <td>—</td>
+              <td>透明背景（输出 qtrle/mov）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="config-table-wrap reveal">
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>源码常量</th>
+              <th>默认值</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TEXT_SIZE</td>
+              <td>48</td>
+              <td>气泡文字大小</td>
+            </tr>
+            <tr>
+              <td>NAME_SIZE</td>
+              <td>32</td>
+              <td>名字文字大小</td>
+            </tr>
+            <tr>
+              <td>AVATAR_SIZE</td>
+              <td>100</td>
+              <td>头像尺寸</td>
+            </tr>
+            <tr>
+              <td>BUBBLE_RADIUS</td>
+              <td>16</td>
+              <td>气泡圆角半径</td>
+            </tr>
+            <tr>
+              <td>MAX_WIDTH</td>
+              <td>860</td>
+              <td>气泡最大宽度</td>
+            </tr>
+            <tr>
+              <td>FADE_SPAN</td>
+              <td>5</td>
+              <td>淡入窗口（最近 N 个字符同时渐变）</td>
+            </tr>
+            <tr>
+              <td>LETTER_SPACING</td>
+              <td>3</td>
+              <td>字符间距 (px)</td>
+            </tr>
+            <tr>
+              <td>LINE_GAP</td>
+              <td>30</td>
+              <td>行间距 (px)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     Footer
+     ═══════════════════════════════════════════════════════════ -->
+  <footer>
+    <p>
+      subtitle-quote ·
+      <a href="https://github.com/yinguobing/subtitle-quote" target="_blank" rel="noopener">GitHub</a> ·
+      MIT License
+    </p>
+    <p style="margin-top: 0.4rem; font-size: 0.78rem;">Python 3 · Pillow · ffmpeg</p>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════
+     JavaScript
+     ═══════════════════════════════════════════════════════════ -->
+  <script>
+    /* ── Navigation scroll effect ── */
+    const nav = document.getElementById('nav');
+    let navTicking = false;
+    window.addEventListener('scroll', () => {
+      if (!navTicking) {
+        requestAnimationFrame(() => {
+          nav.classList.toggle('scrolled', window.scrollY > 40);
+          navTicking = false;
+        });
+        navTicking = true;
+      }
+    }, { passive: true });
+
+    /* ── Scroll reveal ── */
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+    /* ── Code copy ── */
+    function copyCode(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 1800);
+      }).catch(() => {
+        btn.textContent = '复制失败';
+        setTimeout(() => { btn.textContent = '复制'; }, 1500);
+      });
+    }
+
+    /* ── Live Chat Typewriter Demo ── */
+    const conversation = [
+      { name: '国冰', text: 'AI 时代，你准备好了吗？', side: 'left', color: 'blue', initial: '冰' },
+      { name: '小明', text: '准备好了', side: 'right', color: 'red', initial: '明' },
+      { name: '国冰', text: '那就开始吧！', side: 'left', color: 'blue', initial: '冰' },
+    ];
+
+    const SPEED = 65;        // ms per character
+    const PAUSE_BETWEEN = 1800; // pause between messages
+    const PAUSE_CYCLE = 3500;   // pause after full cycle
+
+    const chatBody = document.getElementById('chatBody');
+
+    function createMsgHTML(msg) {
+      const sideClass = msg.side === 'right' ? ' right' : '';
+      return `
+    <div class="chat-msg${sideClass}">
+      <div class="chat-avatar-col">
+        <div class="chat-avatar ${msg.color}">${msg.initial}</div>
+        <span class="chat-msg-name">${msg.name}</span>
+      </div>
+      <div class="chat-bubble"></div>
+    </div>
+  `;
+    }
+
+    function buildCharSpans(text) {
+      return [...text].map(ch => `<span class="char pending">${escapeHTML(ch)}</span>`).join('');
+    }
+
+    function escapeHTML(str) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return str.replace(/[&<>"']/g, c => map[c]);
+    }
+
+    let currentMsgIdx = 0;
+    let typingTimeout = null;
+    let cursorEl = null;
+    let demoActive = false;
+
+    function removeCursor() {
+      if (cursorEl) { cursorEl.remove(); cursorEl = null; }
+    }
+
+    function addCursor(bubble) {
+      removeCursor();
+      cursorEl = document.createElement('span');
+      cursorEl.className = 'chat-cursor';
+      bubble.appendChild(cursorEl);
+    }
+
+    function idleCursor() {
+      if (cursorEl) cursorEl.classList.add('idle');
+    }
+
+    function typeMessage(msgEl, msg, callback) {
+      const bubble = msgEl.querySelector('.chat-bubble');
+      const chars = [...msg.text];
+      bubble.innerHTML = buildCharSpans(msg.text);
+      addCursor(bubble);
+
+      const charSpans = bubble.querySelectorAll('.char');
+      let i = 0;
+
+      function typeNext() {
+        if (i >= chars.length) {
+          idleCursor();
+          typingTimeout = setTimeout(callback, PAUSE_BETWEEN);
+          return;
+        }
+
+        const span = charSpans[i];
+        span.classList.remove('pending');
+
+        // Mark recent chars for glow effect
+        if (i >= 2) charSpans[i - 2]?.classList.remove('recent');
+        span.classList.add('recent');
+
+        i++;
+        typingTimeout = setTimeout(typeNext, SPEED);
+      }
+
+      typeNext();
+    }
+
+    function runConversation(startIdx = 0) {
+      if (demoActive) return; // guard against double-start
+      demoActive = true;
+
+      chatBody.innerHTML = '';
+      removeCursor();
+      currentMsgIdx = startIdx;
+
+      function showNext() {
+        if (currentMsgIdx >= conversation.length) {
+          // Cycle complete, pause then restart
+          typingTimeout = setTimeout(() => {
+            demoActive = false;
+            runConversation(0);
+          }, PAUSE_CYCLE);
+          return;
+        }
+
+        const msgData = conversation[currentMsgIdx];
+        const msgHTML = createMsgHTML(msgData);
+        chatBody.insertAdjacentHTML('beforeend', msgHTML);
+
+        const msgEl = chatBody.lastElementChild;
+        // Force re-trigger CSS animation on the new element
+        requestAnimationFrame(() => {
+          msgEl.style.animation = 'none';
+          msgEl.offsetHeight; // force reflow
+          msgEl.style.animation = '';
+        });
+
+        currentMsgIdx++;
+
+        // Small delay before typing starts
+        typingTimeout = setTimeout(() => {
+          typeMessage(msgEl, msgData, showNext);
+        }, 400);
+      }
+
+      showNext();
+    }
+
+    // Start the demo
+    runConversation(0);
+
+    // Pause demo when not in viewport to save resources
+    const demoObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) {
+          // Demo scrolled out of view — pause
+          if (typingTimeout) clearTimeout(typingTimeout);
+          removeCursor();
+          demoActive = false;
+        } else {
+          // Demo visible again — restart cycle
+          runConversation(0);
+        }
+      });
+    }, { threshold: 0.3 });
+
+    demoObserver.observe(document.getElementById('hero'));
+  </script>
+</body>
+
+</html>
