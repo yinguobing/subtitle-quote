@@ -35,17 +35,17 @@ from PIL import Image, ImageDraw, ImageFont
 
 FONT = "/home/robin/.local/share/fonts/NotoSansSC-Medium.ttf"
 FONT_BOLD = "/home/robin/.local/share/fonts/NotoSansSC-SemiBold.ttf"
-TEXT_SIZE = 48  # 气泡文字大小
-NAME_SIZE = 32  # 名字大小
-AVATAR_SIZE = 100  # 头像尺寸
-BUBBLE_PAD = (40, 30, 40, 30)  # 气泡内边距 (l, t, r, b)
+TEXT_SIZE = 32  # 气泡文字大小
+NAME_SIZE = 24  # 名字大小
+AVATAR_SIZE = 80  # 头像尺寸
+BUBBLE_PAD = (30, 20, 20, 40)  # 气泡内边距 (l, t, r, b)
 BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
-AVATAR_GAP = 12  # 头像到气泡间距
-VERTICAL_OFFSET = 180  # 垂直偏移（正=上移）
-LINE_GAP = 8  # 文本行间距
+AVATAR_GAP = 24  # 头像到气泡间距
+VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
+LINE_GAP = 16  # 文本行间距
 MAX_WIDTH = 700  # 气泡最大宽度
 FPS = 20
-FRAMES_PER_CHAR = 5  # 每字符持续帧数（越大打字越慢）
+FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
 
 # 颜色（暗色模式，统一 RGBA 四元组）
 BUBBLE_COLOR_OTHER = (46, 46, 46, 255)  # 对方气泡：暗灰
@@ -178,36 +178,33 @@ def render_quote(
     # 名字尺寸
     bbox_n = draw.textbbox((0, 0), name, font=name_font)
     nw, nh = bbox_n[2] - bbox_n[0], bbox_n[3] - bbox_n[1]
-    name_gap = 4  # 名字到气泡的间距
+    name_gap = 4  # 头像到名字的间距
 
-    # 整体内容块：头像 + 间距 + (名字/气泡)
-    text_col_h = nh + name_gap + bh  # 名字+气泡总高
+    # 整体内容块：左列(头像+名字) + 间距 + 右列(气泡)，顶部对齐
+    avatar_col_h = AVATAR_SIZE + name_gap + nh
     content_w = AVATAR_SIZE + AVATAR_GAP + bw
-    content_h = max(AVATAR_SIZE, text_col_h)
+    content_h = max(avatar_col_h, bh)
 
     # 居中定位（整体内容块）
     base_x = (canvas_w - content_w) // 2
     base_y = (canvas_h - content_h) // 2 - VERTICAL_OFFSET
 
-    # 头像与内容顶部对齐
     if side == "left":
         avatar_x = base_x
-        text_col_x = base_x + AVATAR_SIZE + AVATAR_GAP  # 名字+气泡的 x 起点
-        name_align = "left"
+        bubble_x = base_x + AVATAR_SIZE + AVATAR_GAP
     else:
-        text_col_x = base_x
+        bubble_x = base_x
         avatar_x = base_x + bw + AVATAR_GAP
-        name_align = "right"
 
-    # ── 名字（在气泡上方，与气泡左/右对齐）──
-    if name_align == "left":
-        name_x = text_col_x
-    else:
-        name_x = text_col_x + bw - nw
+    # ── 头像在内容块顶部 ──
+    avatar_y = base_y
 
-    avatar_y = base_y + (content_h - AVATAR_SIZE) // 2  # 头像在内容块中垂直居中
-    name_y = base_y
-    bubble_y = name_y + nh + name_gap
+    # ── 名字在头像正下方，水平居中 ──
+    name_x = avatar_x + (AVATAR_SIZE - nw) // 2
+    name_y = avatar_y + AVATAR_SIZE + name_gap
+
+    # ── 气泡与头像顶部对齐 ──
+    bubble_y = base_y
 
     # ── 选择气泡颜色 ──
     bubble_color = BUBBLE_COLOR_SELF if side == "right" else BUBBLE_COLOR_OTHER
@@ -221,14 +218,14 @@ def render_quote(
 
     # 绘制气泡（微信无尾巴）
     draw.rounded_rectangle(
-        [text_col_x, bubble_y, text_col_x + bw, bubble_y + bh],
+        [bubble_x, bubble_y, bubble_x + bw, bubble_y + bh],
         radius=BUBBLE_RADIUS,
         fill=bubble_color,
     )
 
     # 绘制文字
     pad_l, pad_t = BUBBLE_PAD[0], BUBBLE_PAD[1]
-    tx_pos = text_col_x + pad_l
+    tx_pos = bubble_x + pad_l
     ty_pos = bubble_y + pad_t
     for line in lines:
         draw.text((tx_pos, ty_pos), line, fill=TEXT_COLOR, font=font)
