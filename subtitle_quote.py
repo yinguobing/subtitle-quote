@@ -473,7 +473,10 @@ def main():
             bg_color=bg_color,
         )
         out = args.output
-        if not any(out.endswith(ext) for ext in (".mp4", ".mov")):
+        if args.transparent:
+            # qtrle 编码必须 .mov 容器
+            out = os.path.splitext(out)[0] + ".mov"
+        elif not any(out.endswith(ext) for ext in (".mp4", ".mov")):
             out += default_ext
         save_frames_to_video(frames, out, args.fps, transparent=args.transparent)
         print(f"→ {out}")
