@@ -40,7 +40,8 @@ BUBBLE_PAD = (30, 20, 30, 80)  # 气泡内边距 (l, t, r, b)
 BUBBLE_RADIUS = 8  # 气泡圆角（微信风格：小圆角）
 AVATAR_GAP = 24  # 头像到气泡间距
 VERTICAL_OFFSET = 0  # 垂直偏移（正=上移）
-LINE_GAP = 20  # 文本行间距
+LINE_GAP = 16  # 文本行间距
+LETTER_SPACING = 2  # 字符间距（px）
 MAX_WIDTH = 700  # 气泡最大宽度
 FPS = 24
 FRAMES_PER_CHAR = 2  # 每字符持续帧数（越大打字越慢）
@@ -104,13 +105,14 @@ def load_avatar(path, size):
 
 
 def word_wrap(text, font, max_width, draw):
-    """逐字换行，返回行列表"""
+    """逐字换行（含字间距），返回行列表"""
     lines = []
     cur = ""
     for ch in text:
         test = cur + ch
         bbox = draw.textbbox((0, 0), test, font=font)
-        if bbox[2] - bbox[0] > max_width and cur:
+        w = bbox[2] - bbox[0] + LETTER_SPACING * max(len(test) - 1, 0)
+        if w > max_width and cur:
             lines.append(cur)
             cur = ch
         else:
@@ -121,11 +123,11 @@ def word_wrap(text, font, max_width, draw):
 
 
 def measure_block(lines, font, draw):
-    """测量文本块尺寸"""
+    """测量文本块尺寸（含字间距）"""
     max_w = max_h = 0
     for i, line in enumerate(lines):
         bbox = draw.textbbox((0, 0), line, font=font)
-        w = bbox[2] - bbox[0]
+        w = bbox[2] - bbox[0] + LETTER_SPACING * max(len(line) - 1, 0)
         h = bbox[3] - bbox[1]
         max_w = max(max_w, w)
         max_h += h + (LINE_GAP if i < len(lines) - 1 else 0)
@@ -222,11 +224,14 @@ def render_quote(
     base_tx = bubble_x + pad_l
     ty = bubble_y + pad_t
 
-    # 先画到透明层（全部文字 100% 不透明）
+    # 先画到透明层（逐字绘制以支持 LETTER_SPACING）
     text_layer = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
     layer_draw = ImageDraw.Draw(text_layer)
     for line in lines:
-        layer_draw.text((base_tx, ty), line, fill=TEXT_COLOR, font=font)
+        cx = base_tx
+        for ch in line:
+            layer_draw.text((cx, ty), ch, fill=TEXT_COLOR, font=font)
+            cx += layer_draw.textbbox((0, 0), ch, font=font)[2] + LETTER_SPACING
         lh = layer_draw.textbbox((0, 0), line, font=font)[3]
         ty += lh + LINE_GAP
 
@@ -252,7 +257,7 @@ def render_quote(
                             r, g, b, pixel_a = layer_pix[px, py]
                             if pixel_a > 0:
                                 layer_pix[px, py] = (r, g, b, int(pixel_a * a))
-                char_x += layer_draw.textbbox((0, 0), ch, font=font)[2]
+                char_x += layer_draw.textbbox((0, 0), ch, font=font)[2] + LETTER_SPACING
             # 换行
             char_x = base_tx
             char_y += layer_draw.textbbox((0, 0), line, font=font)[3] + LINE_GAP
